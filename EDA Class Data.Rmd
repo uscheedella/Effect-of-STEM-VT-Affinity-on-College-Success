@@ -1,0 +1,87 @@
+---
+title: "EDA Class Data"
+author: "Sriya Cheedella"
+date: "September 24, 2019"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup tex, echo=FALSE}
+Sys.setenv(PATH = paste(Sys.getenv("PATH"), "C:\\Users\\Ujvala\\AppData\\Local\\Programs\\MiKTeX 2.9\\miktex\\bin\\x64", sep=.Platform$path.sep))
+```
+
+```{r data, echo=TRUE}
+library(dplyr)
+alldata <- read.csv("C:/Users/Ujvala/Downloads/2019CMDA2014_ClassSurvey_Complete (1).csv", header=TRUE)
+curdata <- as.data.frame(cbind(alldata$Q47_1, alldata$Q21_1, alldata$Q22_1, alldata$Q23_1, alldata$Q24_1, alldata$Q25_1))
+enddata <- curdata %>% filter_all(all_vars(!is.na(.)))
+colnames(enddata) <- c("Excite", "CSLove", "StatLove", "MathLove", "DSLove", "VTLove")
+```
+Let's check the assumptions for multiple linear regression!
+
+We should test for normality, but violating this condition is not a major issue so we will ignore it now for simplicity. Plus, after the cleaning the data we have a sample size of 21 so it's safe to assume normality with the Central Limit Theorem.
+
+Let's see if there is linearity:
+```{r cormatrix, echo=TRUE}
+library(ggcorrplot)
+library(ggplot2)
+library(GGally)
+cor <- cor(enddata)
+cormat <- cor_pmat(enddata)
+ggcorrplot(cor)
+ggpairs(enddata)
+```
+There are a lot of variables that aren't linearly associated, but we'll find the most significant variables and utilize the ones that make the best model.
+
+```{r stepwise, echo=TRUE}
+library(MASS)
+fitall <- lm(Excite ~ CSLove + StatLove + MathLove + DSLove + VTLove, data=enddata)
+summary(fitall)
+fitnone <- lm(Excite ~ 1, data=enddata)
+summary(fitnone)
+
+bestfit = stepAIC(fitnone, direction = "both", scope = list(upper=fitall, lower=fitnone))
+formula(bestfit)
+```
+We now see that how much students like math and Virginia Tech correlate best with how excited students are for this class. We will now create a new correlation matrix with those variables for simplicity.
+
+```{r newcor, echo=TRUE}
+sigdata <- enddata %>% dplyr::select(Excite, MathLove, VTLove)
+sigcor <- cor(sigdata)
+sigcormat <- cor_pmat(sigdata)
+ggcorrplot(sigcor)
+ggpairs(sigdata)
+
+```
+Even though the correlations aren't significant, these are the best we can use so we will continue with this model.
+
+```{r homoscedacity, echo=TRUE}
+library(lmtest)
+bptest(bestfit)
+```
+With a p-value of 0.6004, there is slight evidence of heteroscedacity but we will continue regardless since it doesn't seem too significant.
+
+Normally we would check for serial correlation between points, but each person's response for the questions are independent of each other and each person's liking for the particular subject are independent as well. So we can assume the errors aren't related and one observation does not increase the probability of another observation.
+
+The test for serial correlation should only be done on time dependent data which this data isn't. It also shouldn't be used on data that hasn't been cleaned since it excludes data points that may be vital.
+
+We will now conduct multiple linear regression and interpret the results!
+
+```{r mls, echo=TRUE}
+summary(bestfit)
+
+library(ggiraphExtra)
+ggPredict(bestfit, se=FALSE, interactive = TRUE)
+```
+The p-values for each variable are significant (less than 0.05) so there is no evidence of multicollinearity which is good! The R^2 value is not very high (0.454) but it's considerably decent since data regularly isn't super clean.
+
+The equation is Excite = 83.2733 + 0.3995(MathLove) - 0.03731(VTLove). When there is 0 liking towards for math and VT the excitement is 83.2733 which is fairly high! But the more someone likes Virginia Tech, they are slightly less excited about this class while the more a student likes math they are signficantly more excited for this class.
+
+
